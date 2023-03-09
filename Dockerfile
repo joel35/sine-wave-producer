@@ -1,15 +1,22 @@
-FROM python:3.11
+FROM python:3.11.2-slim-bullseye
+
 ENV PYTHONUNBUFFERED=true
 ENV DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /app
+ARG APP_DIR=/app
+ARG PROJECT_DIR=./sine_wave_producer
+ARG REQUIREMENTS_FILE=requirements.txt
 
-COPY requirements.txt requirements.txt
+WORKDIR $APP_DIR
 
-RUN pip3 install --upgrade pip \
-    && pip3 install -r requirements.txt \
-    && rm -rf /root/.cache/pip
+COPY $REQUIREMENTS_FILE $REQUIREMENTS_FILE
 
-COPY . .
+RUN pip3 install --upgrade --no-input --no-cache-dir pip \
+    && pip3 install --upgrade --no-input --no-cache-dir --requirement $REQUIREMENTS_FILE \
+    && rm --recursive --force /root/.cache/pip \
+    && rm $REQUIREMENTS_FILE
 
-CMD ["python3", "main.py"]
+COPY $PROJECT_DIR .
+
+ENTRYPOINT ["python3"]
+CMD ["main.py"]
