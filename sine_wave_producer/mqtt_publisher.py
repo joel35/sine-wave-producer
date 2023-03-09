@@ -23,8 +23,7 @@ def initialise_mqtt_connection(
         keepalive=timeout
     )
 
-    logging.info(f'{result=}')
-    logging.info(f'{client.is_connected()=}')
+    logging.info(f'{client=}')
     return client
 
 
