@@ -19,7 +19,8 @@ MQTT_TIMEOUT = int(os.getenv("MQTT_TIMEOUT", 60))
 ROOT_MQTT_TOPIC = os.getenv('ROOT_MQTT_TOPIC', 'testing')
 DATA_MQTT_TOPIC = os.getenv('DATA_MQTT_TOPIC', 'sine_wave')
 
-X_LEN = os.getenv('X_LEN', 100)
+FPS = int(os.getenv('FPS', 1))
+X_LEN = int(os.getenv('X_LEN', 100))
 
 logging.basicConfig(level=LOGLEVEL)
 
@@ -30,20 +31,27 @@ def main():
     loop(
         get_x=partial(get_x_func, X_LEN),
         get_y=get_y_func,
-        run=get_run,
         publish=partial(publish_func, get_mqtt()),
-        counter=itertools.count(0)
+        run=get_run,
+        counter=itertools.count(0),
+        delay=delay_func
     )
 
 
-def loop(get_x: Callable[[], np.ndarray], get_y: Callable[[int, np.ndarray], np.ndarray],
-         publish: Callable[[np.ndarray, np.ndarray], bool], run: Callable[[], bool], counter: Iterator):
+def loop(
+        get_x: Callable[[], np.ndarray],
+        get_y: Callable[[int, np.ndarray], np.ndarray],
+        publish: Callable[[Any, Any], bool],
+        run: Callable[[], bool],
+        counter: Iterator,
+        delay: Callable[[], None]
+):
     x = get_x()
 
     while run():
         y = get_y(next(counter), x)
         publish(x, y)
-        sleep(1)
+        delay()
 
 
 def get_x_func(x_len: int = 100) -> np.ndarray:
@@ -104,6 +112,11 @@ def publish_many(to_publish: dict[str, Any], client: client.Client) -> list[int]
 
     client.loop()
     return results
+
+
+def delay_func(i: int = None):
+    i = i or 1 / FPS
+    sleep(i)
 
 
 if __name__ == '__main__':
