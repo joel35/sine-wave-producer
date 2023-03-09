@@ -3,6 +3,9 @@ tests/
 .gitignore
 .dockerignore
 Dockerfile
+README.md
+LICENSE
+.venv
 
 ### VisualStudioCode template
 .vscode/*
