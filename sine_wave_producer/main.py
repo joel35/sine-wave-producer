@@ -1,3 +1,5 @@
+# Publish sine wave data via MQTT.
+# Version 1.1 GC - Added peaks finder over a threshold to data, listed as xPOI (point of interest).
 import itertools
 import json
 import logging
@@ -7,6 +9,7 @@ from time import sleep, time
 from typing import Callable, Iterator, Any
 import numpy as np
 from paho.mqtt import client
+from scipy.signal import find_peaks
 
 from mqtt_publisher import initialise_mqtt_connection
 
@@ -19,8 +22,12 @@ MQTT_TIMEOUT = int(os.getenv("MQTT_TIMEOUT", 60))
 ROOT_MQTT_TOPIC = os.getenv('ROOT_MQTT_TOPIC', 'testing')
 DATA_MQTT_TOPIC = os.getenv('DATA_MQTT_TOPIC', 'sine_wave')
 
-FPS = int(os.getenv('FPS', 1))
+FPS = int(os.getenv('FPS', 5))
 X_LEN = int(os.getenv('X_LEN', 100))
+
+#added V1.1
+USE_POI = bool(os.getenv('USE_POI', False))
+POI_THRESHOLD = float(os.getenv('POI_THRESHOLD', 10.0)) # set the threshold out of range so it doesnt get triggered.
 
 logging.basicConfig(level=LOGLEVEL)
 
@@ -31,6 +38,7 @@ def main():
     loop(
         get_x=partial(get_x_func, X_LEN),
         get_y=get_y_func,
+        get_poi=partial(get_xpoi_func, np.array),
         publish=partial(publish_func, get_mqtt()),
         run=get_run,
         counter=itertools.count(0),
@@ -41,6 +49,7 @@ def main():
 def loop(
         get_x: Callable[[], np.ndarray],
         get_y: Callable[[int, np.ndarray], np.ndarray],
+        get_poi: Callable[[int, np.ndarray], np.ndarray],
         publish: Callable[[Any, Any], bool],
         run: Callable[[], bool],
         counter: Iterator,
@@ -50,7 +59,8 @@ def loop(
 
     while run():
         y = get_y(next(counter), x)
-        publish(x, y)
+        xpoi = get_poi(y)
+        publish(x, y, xpoi)
         delay()
 
 
@@ -61,12 +71,33 @@ def get_x_func(x_len: int = 100) -> np.ndarray:
 def get_y_func(i: int, x: np.ndarray) -> np.ndarray:
     return sine_wave(x + i / 10)
 
+def get_xpoi_func(i: int, y: np.ndarray) -> np.ndarray:
+    if (USE_POI == True):
+        peaks = find_peaks(abs(y), height=POI_THRESHOLD)
+    else:
+        peaks = []   
+    return peaks
 
-def publish_func(mqtt_client: client.Client, x: np.ndarray, y: np.ndarray) -> bool:
-    data_json = json.dumps({
+def publish_func(mqtt_client: client.Client, x: np.ndarray, y: np.ndarray, xpoi: np.ndarray) -> bool:
+    if (USE_POI == True):
+        peakPnt = list(xpoi[0].astype(float))
+        peakLabel = []
+    #    TODO: Add some code to find moving or static items and change the labels accordingly.
+    #          If range was available at this point it could also be added, or calculated at received end.
+        for hi in range(len(peakPnt)):
+            peakLabel.append('Something')
+        outputPeak = peakPnt + peakLabel
+        data_json = json.dumps({
         'ts': time(),
         'x': list(x),
-        'y': list(y)
+        'y': list(y),
+        'xpoi': outputPeak,
+        })
+    else:
+        data_json = json.dumps({
+        'ts': time(),
+        'x': list(x),
+        'y': list(y),
     })
 
     result = publish_many(
